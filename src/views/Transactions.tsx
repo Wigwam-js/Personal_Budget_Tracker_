@@ -15,6 +15,8 @@ export const Transactions: React.FC = () => {
   const [merchant, setMerchant] = useState('');
   const [notes, setNotes] = useState('');
   const [accountId, setAccountId] = useState(accounts[0]?.id || '');
+  const [txType, setTxType] = useState<TransactionType | 'auto'>('auto');
+  const [toAccountId, setToAccountId] = useState('');
 
   // Edit State
   const [editCategory, setEditCategory] = useState('');
@@ -23,6 +25,10 @@ export const Transactions: React.FC = () => {
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount || !merchant || !accountId) return;
+    if (txType === 'transfer' && !toAccountId) return;
+
+    const isManual = txType !== 'auto';
+    const finalType = isManual ? (txType as TransactionType) : 'expense';
 
     await addTransaction({
       date: new Date().toISOString(),
@@ -30,13 +36,16 @@ export const Transactions: React.FC = () => {
       merchant,
       notes,
       accountId,
-      category: 'Pending...', // AI will update this
-      type: 'expense', // Default, AI will update
-    });
+      toAccountId: txType === 'transfer' ? toAccountId : undefined,
+      category: isManual ? (txType === 'transfer' ? 'Transfer' : 'Manual Entry') : 'Pending...',
+      type: finalType,
+    }, isManual);
 
     setAmount('');
     setMerchant('');
     setNotes('');
+    setTxType('auto');
+    setToAccountId('');
     setIsAdding(false);
   };
 
@@ -87,7 +96,16 @@ export const Transactions: React.FC = () => {
       </header>
 
       {isAdding && (
-        <form onSubmit={handleAdd} className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+        <form onSubmit={handleAdd} className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-zinc-500">Type</label>
+            <select value={txType} onChange={e => setTxType(e.target.value as TransactionType | 'auto')} className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900">
+              <option value="auto">Auto (AI)</option>
+              <option value="expense">Expense</option>
+              <option value="income">Income</option>
+              <option value="transfer">Transfer</option>
+            </select>
+          </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-zinc-500">Amount (₹)</label>
             <input type="number" step="0.01" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900" placeholder="0.00" />
@@ -97,18 +115,28 @@ export const Transactions: React.FC = () => {
             <input type="text" required value={merchant} onChange={e => setMerchant(e.target.value)} className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900" placeholder="e.g. Starbucks" />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-500">Account</label>
+            <label className="text-xs font-medium text-zinc-500">{txType === 'transfer' ? 'From Account' : 'Account'}</label>
             <select value={accountId} onChange={e => setAccountId(e.target.value)} className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900">
               {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-500">Notes (Optional)</label>
-            <input type="text" value={notes} onChange={e => setNotes(e.target.value)} className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900" placeholder="Helps AI understand..." />
-          </div>
-          <div className="lg:col-span-5 flex justify-end mt-2">
+          {txType === 'transfer' ? (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-500">To Account</label>
+              <select required value={toAccountId} onChange={e => setToAccountId(e.target.value)} className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900">
+                <option value="" disabled>Select account</option>
+                {accounts.filter(a => a.id !== accountId).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-500">Notes (Optional)</label>
+              <input type="text" value={notes} onChange={e => setNotes(e.target.value)} className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900" placeholder="Helps AI understand..." />
+            </div>
+          )}
+          <div className="lg:col-span-6 flex justify-end mt-2">
             <button type="submit" className="bg-zinc-900 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-zinc-800 transition-colors">
-              Save & Auto-Categorize
+              {txType === 'auto' ? 'Save & Auto-Categorize' : 'Save Transaction'}
             </button>
           </div>
         </form>
@@ -134,6 +162,19 @@ export const Transactions: React.FC = () => {
                 </td>
                 <td className="px-6 py-4 font-medium text-zinc-900">
                   {tx.merchant}
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <span className="text-xs text-zinc-400 font-normal bg-zinc-100 px-1.5 py-0.5 rounded">
+                      {accounts.find(a => a.id === tx.accountId)?.name || 'Unknown'}
+                    </span>
+                    {tx.type === 'transfer' && tx.toAccountId && (
+                      <>
+                        <span className="text-xs text-zinc-400">→</span>
+                        <span className="text-xs text-zinc-400 font-normal bg-zinc-100 px-1.5 py-0.5 rounded">
+                          {accounts.find(a => a.id === tx.toAccountId)?.name || 'Unknown'}
+                        </span>
+                      </>
+                    )}
+                  </div>
                   {tx.notes && <p className="text-xs text-zinc-400 font-normal mt-0.5">{tx.notes}</p>}
                 </td>
                 <td className="px-6 py-4">
@@ -157,11 +198,17 @@ export const Transactions: React.FC = () => {
                       value={editType} 
                       onChange={e => setEditType(e.target.value as TransactionType)}
                       className="w-full px-2 py-1 bg-white border border-zinc-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                      disabled={tx.type === 'transfer'}
                     >
-                      <option value="expense">Expense</option>
-                      <option value="income">Income</option>
-                      <option value="transfer">Transfer</option>
-                      <option value="pass-through">Pass-Through</option>
+                      {tx.type === 'transfer' ? (
+                        <option value="transfer">Transfer</option>
+                      ) : (
+                        <>
+                          <option value="expense">Expense</option>
+                          <option value="income">Income</option>
+                          <option value="pass-through">Pass-Through</option>
+                        </>
+                      )}
                     </select>
                   ) : (
                     <span className={getTypeBadge(tx.type)}>

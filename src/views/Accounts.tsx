@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/StoreContext';
-import { Wallet, CreditCard, Plus, Trash2 } from 'lucide-react';
+import { Wallet, CreditCard, Plus, Trash2, Edit2, Check, X } from 'lucide-react';
 
 export const Accounts: React.FC = () => {
-  const { accounts, addAccount, deleteAccount } = useStore();
+  const { accounts, addAccount, deleteAccount, updateAccount } = useStore();
   const [isAdding, setIsAdding] = useState(false);
   const [name, setName] = useState('');
   const [type, setType] = useState<'bank' | 'credit'>('bank');
   const [balance, setBalance] = useState('');
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editBalance, setEditBalance] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,6 +26,21 @@ export const Accounts: React.FC = () => {
     setName('');
     setBalance('');
     setIsAdding(false);
+  };
+
+  const startEdit = (account: any) => {
+    setEditingId(account.id);
+    setEditName(account.name);
+    setEditBalance(account.balance.toString());
+  };
+
+  const saveEdit = (id: string) => {
+    if (!editName || !editBalance) return;
+    updateAccount(id, {
+      name: editName,
+      balance: parseFloat(editBalance)
+    });
+    setEditingId(null);
   };
 
   return (
@@ -92,21 +111,51 @@ export const Accounts: React.FC = () => {
               <div className="w-10 h-10 rounded-lg bg-zinc-100 flex items-center justify-center text-zinc-600">
                 {account.type === 'bank' ? <Wallet className="w-5 h-5" /> : <CreditCard className="w-5 h-5" />}
               </div>
-              <button
-                onClick={() => deleteAccount(account.id)}
-                className="text-zinc-400 hover:text-red-500 transition-colors"
-                title="Delete Account"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                {editingId === account.id ? (
+                  <>
+                    <button onClick={() => saveEdit(account.id)} className="text-zinc-400 hover:text-emerald-500 transition-colors" title="Save">
+                      <Check className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => setEditingId(null)} className="text-zinc-400 hover:text-zinc-600 transition-colors" title="Cancel">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => startEdit(account)} className="text-zinc-400 hover:text-blue-500 transition-colors" title="Edit Account">
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => deleteAccount(account.id)} className="text-zinc-400 hover:text-red-500 transition-colors" title="Delete Account">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
-            <h3 className="font-medium text-zinc-900 mb-1">{account.name}</h3>
-            <p className="text-sm text-zinc-500 capitalize mb-4">{account.type}</p>
-            <div className="mt-auto">
-              <p className="text-2xl font-bold tracking-tight">
-                ₹{account.balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </p>
-            </div>
+            
+            {editingId === account.id ? (
+              <div className="space-y-3 mt-2">
+                <div>
+                  <label className="text-xs text-zinc-500">Name</label>
+                  <input type="text" value={editName} onChange={e => setEditName(e.target.value)} className="w-full px-2 py-1 bg-zinc-50 border border-zinc-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900" />
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-500">Balance (₹)</label>
+                  <input type="number" step="0.01" value={editBalance} onChange={e => setEditBalance(e.target.value)} className="w-full px-2 py-1 bg-zinc-50 border border-zinc-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900" />
+                </div>
+              </div>
+            ) : (
+              <>
+                <h3 className="font-medium text-zinc-900 mb-1">{account.name}</h3>
+                <p className="text-sm text-zinc-500 capitalize mb-4">{account.type}</p>
+                <div className="mt-auto">
+                  <p className="text-2xl font-bold tracking-tight">
+                    ₹{account.balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         ))}
         {accounts.length === 0 && (

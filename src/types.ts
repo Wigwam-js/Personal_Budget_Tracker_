@@ -8,6 +8,7 @@ export interface Transaction {
   category: string;
   type: TransactionType;
   accountId: string;
+  toAccountId?: string;
   notes?: string;
   isAIAnalyzed?: boolean;
   userId?: string;

@@ -19,7 +19,7 @@ interface StoreState {
   investments: Investment[];
   login: () => Promise<void>;
   logout: () => Promise<void>;
-  addTransaction: (t: Omit<Transaction, 'id' | 'isAIAnalyzed' | 'userId'>) => Promise<void>;
+  addTransaction: (t: Omit<Transaction, 'id' | 'isAIAnalyzed' | 'userId'>, skipAI?: boolean) => Promise<void>;
   updateTransaction: (id: string, t: Partial<Transaction>) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
   addAccount: (a: Omit<Account, 'id' | 'userId'>) => Promise<void>;
@@ -119,37 +119,58 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     await signOut(auth);
   };
 
-  const addTransaction = async (t: Omit<Transaction, 'id' | 'isAIAnalyzed' | 'userId'>) => {
+  const addTransaction = async (t: Omit<Transaction, 'id' | 'isAIAnalyzed' | 'userId'>, skipAI?: boolean) => {
     if (!user) return;
     const tempId = generateId();
-    const newTx: Transaction = { ...t, id: tempId, isAIAnalyzed: false, userId: user.uid };
+    const newTx: Transaction = { ...t, id: tempId, isAIAnalyzed: skipAI || false, userId: user.uid };
     
     try {
       // Optimistic update
       setTransactions(prev => [newTx, ...prev]);
 
-      // Update account balance
-      const accountRef = doc(db, `users/${user.uid}/accounts/${t.accountId}`);
-      const balanceChange = t.type === 'expense' ? -t.amount : (t.type === 'income' ? t.amount : 0);
-      
       const batch = writeBatch(db);
       const txRef = doc(db, `users/${user.uid}/transactions/${tempId}`);
       batch.set(txRef, newTx);
-      
+
+      // Update account balances
+      let balanceChange = 0;
+      if (t.type === 'expense') balanceChange = -t.amount;
+      else if (t.type === 'income') balanceChange = t.amount;
+      else if (t.type === 'transfer') balanceChange = -t.amount; // From account decreases
+
       if (balanceChange !== 0) {
+        const accountRef = doc(db, `users/${user.uid}/accounts/${t.accountId}`);
         batch.update(accountRef, { balance: increment(balanceChange) });
+      }
+
+      if (t.type === 'transfer' && t.toAccountId) {
+        const toAccountRef = doc(db, `users/${user.uid}/accounts/${t.toAccountId}`);
+        batch.update(toAccountRef, { balance: increment(t.amount) }); // To account increases
       }
       
       await batch.commit();
+
+      if (skipAI) return;
 
       // AI Categorization
       const { category, type, reasoning } = await categorizeTransaction(t.merchant, t.amount, t.notes, corrections);
       
       // If AI changes the type, we need to adjust the balance again
       if (type !== t.type) {
-        const newBalanceChange = type === 'expense' ? -t.amount : (type === 'income' ? t.amount : 0);
-        const diff = newBalanceChange - balanceChange;
+        // Revert old change
+        let revertChange = 0;
+        if (t.type === 'expense') revertChange = t.amount;
+        else if (t.type === 'income') revertChange = -t.amount;
+        else if (t.type === 'transfer') revertChange = t.amount; // We don't revert toAccount here for simplicity, AI shouldn't change transfer type usually.
+        
+        // Apply new change
+        let newChange = 0;
+        if (type === 'expense') newChange = -t.amount;
+        else if (type === 'income') newChange = t.amount;
+
+        const diff = revertChange + newChange;
         if (diff !== 0) {
+          const accountRef = doc(db, `users/${user.uid}/accounts/${t.accountId}`);
           await updateDoc(accountRef, { balance: increment(diff) });
         }
       }
@@ -181,10 +202,19 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const batch = writeBatch(db);
         batch.delete(doc(db, `users/${user.uid}/transactions/${id}`));
         
-        const balanceChange = tx.type === 'expense' ? tx.amount : (tx.type === 'income' ? -tx.amount : 0);
+        let balanceChange = 0;
+        if (tx.type === 'expense') balanceChange = tx.amount;
+        else if (tx.type === 'income') balanceChange = -tx.amount;
+        else if (tx.type === 'transfer') balanceChange = tx.amount;
+
         if (balanceChange !== 0) {
           const accountRef = doc(db, `users/${user.uid}/accounts/${tx.accountId}`);
           batch.update(accountRef, { balance: increment(balanceChange) });
+        }
+
+        if (tx.type === 'transfer' && tx.toAccountId) {
+          const toAccountRef = doc(db, `users/${user.uid}/accounts/${tx.toAccountId}`);
+          batch.update(toAccountRef, { balance: increment(-tx.amount) });
         }
         await batch.commit();
       }
