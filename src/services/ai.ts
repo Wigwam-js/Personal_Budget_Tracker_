@@ -2,7 +2,8 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { Transaction, CategoryCorrection, TransactionType, Account, Due } from '../types';
 
 // Initialize the Gemini API client
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '');
+const ai = new GoogleGenAI({ apiKey: apiKey as string });
 
 export async function categorizeTransaction(
   merchant: string,
@@ -61,7 +62,8 @@ export async function categorizeTransaction(
     };
   } catch (error) {
     console.error('Error categorizing transaction:', error);
-    return { category: 'Uncategorized', type: 'expense', reasoning: 'Failed to categorize due to an error.' };
+    const errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
+    return { category: 'Uncategorized', type: 'expense', reasoning: `Failed to categorize due to an error: ${errorMessage}` };
   }
 }
 
@@ -171,9 +173,10 @@ export async function parseChatInput(message: string, accounts: Account[]): Prom
     return result;
   } catch (error) {
     console.error('Error parsing chat:', error);
+    const errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
     return {
       action: 'general_response',
-      responseMessage: 'Sorry, I had trouble understanding that. Could you try rephrasing?'
+      responseMessage: `Sorry, I had trouble understanding that. Error details: ${errorMessage}`
     };
   }
 }
