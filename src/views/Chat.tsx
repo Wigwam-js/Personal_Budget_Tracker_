@@ -45,7 +45,7 @@ export const Chat: React.FC = () => {
           amount: response.transaction.amount || 0,
           merchant: response.transaction.merchant || 'Unknown',
           notes: response.transaction.notes || '',
-          accountId: response.transaction.accountId || accounts[0].id,
+          accountId: response.transaction.accountId || (accounts.length > 0 ? accounts[0].id : 'default'),
           category: 'Pending...',
           type: 'expense'
         });
@@ -56,7 +56,7 @@ export const Chat: React.FC = () => {
           dueDate: response.due.dueDate || new Date().toISOString(),
           type: (response.due.type as 'emi' | 'bill') || 'bill',
           isPaid: false,
-          accountId: response.due.accountId || accounts[0].id
+          accountId: response.due.accountId || (accounts.length > 0 ? accounts[0].id : 'default')
         });
         toast.success('Added to EMIs & Dues');
       }

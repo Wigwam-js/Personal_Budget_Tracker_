@@ -163,7 +163,11 @@ export async function parseChatInput(message: string, accounts: Account[]): Prom
       },
     });
 
-    const result = JSON.parse(response.text || '{}');
+    let rawText = response.text || '{}';
+    if (rawText.startsWith('```json')) {
+      rawText = rawText.replace(/^```json\n/, '').replace(/\n```$/, '');
+    }
+    const result = JSON.parse(rawText);
     return result;
   } catch (error) {
     console.error('Error parsing chat:', error);
