@@ -1,0 +1,5 @@
+{
+  "name": "AI Expense Tracker",
+  "description": "An intelligent expense tracker that understands complex spending patterns, pass-through transactions, and visualizes financial data.",
+  "requestFramePermissions": []
+}

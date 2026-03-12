@@ -1,0 +1,113 @@
+{
+  "entities": {
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A financial transaction (expense, income, transfer, pass-through)",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date-time" },
+        "amount": { "type": "number" },
+        "merchant": { "type": "string" },
+        "category": { "type": "string" },
+        "type": { "type": "string", "enum": ["expense", "income", "transfer", "pass-through"] },
+        "accountId": { "type": "string" },
+        "notes": { "type": "string" },
+        "isAIAnalyzed": { "type": "boolean" },
+        "userId": { "type": "string" }
+      },
+      "required": ["date", "amount", "merchant", "category", "type", "accountId", "userId"]
+    },
+    "Account": {
+      "title": "Account",
+      "description": "A bank account or credit card",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["bank", "credit"] },
+        "balance": { "type": "number" },
+        "userId": { "type": "string" }
+      },
+      "required": ["name", "type", "balance", "userId"]
+    },
+    "Budget": {
+      "title": "Budget",
+      "description": "A monthly budget limit for a category",
+      "type": "object",
+      "properties": {
+        "category": { "type": "string" },
+        "amount": { "type": "number" },
+        "userId": { "type": "string" }
+      },
+      "required": ["category", "amount", "userId"]
+    },
+    "Due": {
+      "title": "Due",
+      "description": "An upcoming EMI or bill",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "amount": { "type": "number" },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "type": { "type": "string", "enum": ["emi", "bill"] },
+        "isPaid": { "type": "boolean" },
+        "accountId": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["title", "amount", "dueDate", "type", "isPaid", "accountId", "userId"]
+    },
+    "Investment": {
+      "title": "Investment",
+      "description": "A mutual fund or equity investment",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["mutual_fund", "equity"] },
+        "schemeCode": { "type": "string", "description": "For mutual funds, the mfapi.in scheme code" },
+        "units": { "type": "number" },
+        "averageNav": { "type": "number" },
+        "currentNav": { "type": "number" },
+        "navDate": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["name", "type", "units", "userId"]
+    },
+    "CategoryCorrection": {
+      "title": "CategoryCorrection",
+      "description": "User corrections for AI categorizations",
+      "type": "object",
+      "properties": {
+        "merchant": { "type": "string" },
+        "correctedCategory": { "type": "string" },
+        "correctedType": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["merchant", "correctedCategory", "correctedType", "userId"]
+    }
+  },
+  "firestore": {
+    "users/{userId}/transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/Transaction" },
+      "description": "Transactions for a user"
+    },
+    "users/{userId}/accounts/{accountId}": {
+      "schema": { "$ref": "#/entities/Account" },
+      "description": "Accounts for a user"
+    },
+    "users/{userId}/budgets/{budgetId}": {
+      "schema": { "$ref": "#/entities/Budget" },
+      "description": "Budgets for a user"
+    },
+    "users/{userId}/dues/{dueId}": {
+      "schema": { "$ref": "#/entities/Due" },
+      "description": "Dues for a user"
+    },
+    "users/{userId}/investments/{investmentId}": {
+      "schema": { "$ref": "#/entities/Investment" },
+      "description": "Investments for a user"
+    },
+    "users/{userId}/corrections/{correctionId}": {
+      "schema": { "$ref": "#/entities/CategoryCorrection" },
+      "description": "Category corrections for a user"
+    }
+  }
+}

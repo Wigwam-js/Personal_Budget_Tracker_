@@ -1,0 +1,207 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users/{userId}/transactions/{transactionId}
+    // Fields:
+    //   - date: string (required)
+    //   - amount: number (required)
+    //   - merchant: string (required)
+    //   - category: string (required)
+    //   - type: string (required, enum: ['expense', 'income', 'transfer', 'pass-through'])
+    //   - accountId: string (required)
+    //   - notes: string (optional)
+    //   - isAIAnalyzed: boolean (optional)
+    //   - userId: string (required)
+    //
+    // Collection: users/{userId}/accounts/{accountId}
+    // Fields:
+    //   - name: string (required)
+    //   - type: string (required, enum: ['bank', 'credit'])
+    //   - balance: number (required)
+    //   - userId: string (required)
+    //
+    // Collection: users/{userId}/budgets/{budgetId}
+    // Fields:
+    //   - category: string (required)
+    //   - amount: number (required)
+    //   - userId: string (required)
+    //
+    // Collection: users/{userId}/dues/{dueId}
+    // Fields:
+    //   - title: string (required)
+    //   - amount: number (required)
+    //   - dueDate: string (required)
+    //   - type: string (required, enum: ['emi', 'bill'])
+    //   - isPaid: boolean (required)
+    //   - accountId: string (required)
+    //   - userId: string (required)
+    //
+    // Collection: users/{userId}/investments/{investmentId}
+    // Fields:
+    //   - name: string (required)
+    //   - type: string (required, enum: ['mutual_fund', 'equity'])
+    //   - schemeCode: string (optional)
+    //   - units: number (required)
+    //   - averageNav: number (optional)
+    //   - currentNav: number (optional)
+    //   - navDate: string (optional)
+    //   - userId: string (required)
+    //
+    // Collection: users/{userId}/corrections/{correctionId}
+    // Fields:
+    //   - merchant: string (required)
+    //   - correctedCategory: string (required)
+    //   - correctedType: string (required)
+    //   - userId: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function uidUnchanged() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid;
+    }
+    
+    function uidNotModified() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == resource.data.userId;
+    }
+    
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    
+    function validStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen;
+    }
+
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) ||
+             (request.resource.data[field] is string &&
+              request.resource.data[field].size() >= minLen &&
+              request.resource.data[field].size() <= maxLen);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidTransaction() {
+      return hasRequiredFields(['date', 'amount', 'merchant', 'category', 'type', 'accountId', 'userId']) &&
+             request.resource.data.date is string && request.resource.data.date.size() > 0 && request.resource.data.date.size() < 50 &&
+             request.resource.data.amount is number &&
+             validStringLength('merchant', 1, 100) &&
+             validStringLength('category', 1, 50) &&
+             request.resource.data.type in ['expense', 'income', 'transfer', 'pass-through'] &&
+             validStringLength('accountId', 1, 100) &&
+             isValidOptionalString('notes', 0, 500) &&
+             (!( 'isAIAnalyzed' in request.resource.data ) || request.resource.data.isAIAnalyzed is bool);
+    }
+
+    function isValidAccount() {
+      return hasRequiredFields(['name', 'type', 'balance', 'userId']) &&
+             validStringLength('name', 1, 100) &&
+             request.resource.data.type in ['bank', 'credit'] &&
+             request.resource.data.balance is number;
+    }
+
+    function isValidBudget() {
+      return hasRequiredFields(['category', 'amount', 'userId']) &&
+             validStringLength('category', 1, 50) &&
+             request.resource.data.amount is number && request.resource.data.amount >= 0;
+    }
+
+    function isValidDue() {
+      return hasRequiredFields(['title', 'amount', 'dueDate', 'type', 'isPaid', 'accountId', 'userId']) &&
+             validStringLength('title', 1, 100) &&
+             request.resource.data.amount is number && request.resource.data.amount >= 0 &&
+             request.resource.data.dueDate is string && request.resource.data.dueDate.size() > 0 && request.resource.data.dueDate.size() < 50 &&
+             request.resource.data.type in ['emi', 'bill'] &&
+             request.resource.data.isPaid is bool &&
+             validStringLength('accountId', 1, 100);
+    }
+
+    function isValidInvestment() {
+      return hasRequiredFields(['name', 'type', 'units', 'userId']) &&
+             validStringLength('name', 1, 100) &&
+             request.resource.data.type in ['mutual_fund', 'equity'] &&
+             isValidOptionalString('schemeCode', 0, 50) &&
+             request.resource.data.units is number && request.resource.data.units >= 0 &&
+             (!( 'averageNav' in request.resource.data ) || request.resource.data.averageNav is number) &&
+             (!( 'currentNav' in request.resource.data ) || request.resource.data.currentNav is number) &&
+             isValidOptionalString('navDate', 0, 50);
+    }
+
+    function isValidCorrection() {
+      return hasRequiredFields(['merchant', 'correctedCategory', 'correctedType', 'userId']) &&
+             validStringLength('merchant', 1, 100) &&
+             validStringLength('correctedCategory', 1, 50) &&
+             request.resource.data.correctedType in ['expense', 'income', 'transfer', 'pass-through'];
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      match /transactions/{transactionId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidTransaction() && uidUnchanged();
+        allow update: if isOwner(userId) && isValidTransaction() && uidNotModified();
+        allow delete: if isOwner(userId);
+      }
+      
+      match /accounts/{accountId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidAccount() && uidUnchanged();
+        allow update: if isOwner(userId) && isValidAccount() && uidNotModified();
+        allow delete: if isOwner(userId);
+      }
+      
+      match /budgets/{budgetId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidBudget() && uidUnchanged();
+        allow update: if isOwner(userId) && isValidBudget() && uidNotModified();
+        allow delete: if isOwner(userId);
+      }
+      
+      match /dues/{dueId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidDue() && uidUnchanged();
+        allow update: if isOwner(userId) && isValidDue() && uidNotModified();
+        allow delete: if isOwner(userId);
+      }
+      
+      match /investments/{investmentId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidInvestment() && uidUnchanged();
+        allow update: if isOwner(userId) && isValidInvestment() && uidNotModified();
+        allow delete: if isOwner(userId);
+      }
+      
+      match /corrections/{correctionId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidCorrection() && uidUnchanged();
+        allow update: if isOwner(userId) && isValidCorrection() && uidNotModified();
+        allow delete: if isOwner(userId);
+      }
+    }
+  }
+}
